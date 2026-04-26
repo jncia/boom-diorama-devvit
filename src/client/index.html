@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0d1a" />
+  <title>BOOM DIORAMA</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      background: #0d0d1a; overflow: hidden; font-family: 'Courier New', monospace;
+      width: 100%; height: 100%;
+      --safe-t: env(safe-area-inset-top, 0);
+      --safe-b: env(safe-area-inset-bottom, 0);
+      --safe-l: env(safe-area-inset-left, 0);
+      --safe-r: env(safe-area-inset-right, 0);
+    }
+    #game-canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; cursor: crosshair; touch-action: none; }
+
+    /* ═══ Loading overlay (hides Three.js init flash) ═══ */
+    #boot-overlay {
+      position: fixed; inset: 0; z-index: 700;
+      background: #0d0d1a; display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 18px; transition: opacity 0.45s ease-out;
+    }
+    #boot-overlay.fade { opacity: 0; pointer-events: none; }
+    #boot-overlay .boot-title {
+      color: #ff4422; font-size: clamp(28px, 8vw, 48px); letter-spacing: clamp(4px, 1.2vw, 8px);
+      text-shadow: 0 0 24px #ff4422; text-align: center;
+    }
+    #boot-overlay .boot-sub { color: #88a; font-size: 12px; letter-spacing: 2px; }
+    #boot-overlay .boot-tag { color: #555; font-size: 10px; letter-spacing: 1.5px; margin-top: 18px; }
+
+    /* ═══ HUD (gameplay screen) ═══ */
+    #hud {
+      position: fixed; inset: 0; pointer-events: none;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+    #hud-top {
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+      padding: calc(10px + var(--safe-t)) calc(10px + var(--safe-r)) 10px calc(10px + var(--safe-l));
+      pointer-events: none;
+    }
+    #hud-top > * { pointer-events: all; }
+    #hud-top-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+    #level-display {
+      background: #1a1a2e; border: 2px solid #444; color: #ffdd44;
+      padding: 4px 10px; font-size: 13px; letter-spacing: 1px;
+    }
+
+    #puzzle-widget {
+      background: #1a1a2e; border: 2px solid #444; padding: 6px 10px;
+      display: flex; flex-direction: column; gap: 4px;
+      min-width: 220px; max-width: 320px;
+    }
+    #puzzle-label {
+      display: flex; justify-content: space-between; gap: 12px;
+      font-size: 11px; color: #bbb; letter-spacing: 1px; text-transform: uppercase;
+    }
+    #puzzle-level { color: #ffdd44; }
+    #puzzle-pct   { color: #e0e0ff; font-weight: bold; }
+    #puzzle-pct.done { color: #44ddaa; }
+    #puzzle-bar-wrap { background: #111; border: 1px solid #333; height: 10px; position: relative; }
+    #puzzle-bar-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #ff7722, #ffcc22);
+      transition: width 0.35s ease-out;
+    }
+    #puzzle-bar-target {
+      position: absolute; top: -2px; bottom: -2px; width: 2px;
+      background: #44ddaa; box-shadow: 0 0 4px #44ddaa;
+    }
+    #puzzle-points-row {
+      display: flex; justify-content: space-between; font-size: 10px; color: #bbb;
+      letter-spacing: 1px; text-transform: uppercase; margin-top: 2px;
+    }
+    #puzzle-points { color: #88ccff; font-weight: bold; }
+    #puzzle-points.low  { color: #ffaa44; }
+    #puzzle-points.out  { color: #ff5555; }
+
+    #hud-bottom {
+      display: flex; align-items: flex-end; gap: 8px;
+      padding: 10px calc(12px + var(--safe-r)) calc(10px + var(--safe-b)) calc(12px + var(--safe-l));
+      pointer-events: none;
+    }
+    #hud-bottom > * { pointer-events: all; }
+
+    .hud-btn {
+      background: #1a1a2e; color: #e0e0ff; border: 2px solid #444;
+      padding: 6px 10px; cursor: pointer; font-family: inherit; font-size: 12px;
+      text-transform: uppercase; letter-spacing: 1px;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .hud-btn:hover { background: #2a2a4e; border-color: #888; }
+    .hud-btn.icon { padding: 6px 8px; min-width: 34px; }
+    .hud-btn.toggle-on { color: #44ddaa; border-color: #44ddaa; }
+
+    #bomb-chip {
+      background: #1a1a2e; border: 2px solid #ff4422; color: #fff;
+      padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+      font-family: inherit; font-size: 12px; letter-spacing: 0.5px;
+      min-height: 44px;
+    }
+    #bomb-chip:hover { background: #2a1a1a; }
+    #bomb-chip-emoji { font-size: 22px; line-height: 1; }
+    #bomb-chip-label { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    #bomb-chip-name  { font-size: 11px; color: #fff; }
+    #bomb-chip-cost  { font-size: 10px; color: #88ccff; }
+    #bomb-chip-arrow { color: #888; font-size: 10px; margin-left: 4px; }
+
+    #bomb-popover {
+      position: fixed; bottom: calc(72px + var(--safe-b)); left: calc(12px + var(--safe-l));
+      background: #0d0d1a; border: 2px solid #555; padding: 8px;
+      display: none; flex-direction: column; gap: 4px; z-index: 150;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+      min-width: 220px;
+    }
+    #bomb-popover.open { display: flex; }
+    .bomb-opt {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 8px; background: #1a1a2e; border: 1px solid #333;
+      cursor: pointer; font-family: inherit; color: #ddd; text-align: left;
+      min-height: 40px;
+    }
+    .bomb-opt:hover:not(:disabled):not(.locked) { border-color: #ff4422; background: #2a1a1a; }
+    .bomb-opt.selected { border-color: #ff4422; background: #2a1a1a; }
+    .bomb-opt.locked   { opacity: 0.4; cursor: not-allowed; }
+    .bomb-opt.unaffordable { opacity: 0.55; }
+    .bomb-opt .emo   { font-size: 22px; width: 28px; text-align: center; }
+    .bomb-opt .nm    { flex: 1; font-size: 12px; }
+    .bomb-opt .cost  { font-size: 11px; color: #88ccff; }
+    .bomb-opt.unaffordable .cost { color: #ff7777; }
+
+    #xp-area { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; }
+    #xp-bar-wrap { background: #111; border: 1px solid #333; height: 10px; width: 100%; max-width: 180px; }
+    #xp-bar-fill { height: 100%; background: linear-gradient(90deg, #2266cc, #44aaff); transition: width 0.4s; width: 0%; }
+    #xp-label { font-size: 10px; color: #aac; margin-bottom: 3px; }
+    #bux-display { font-size: 14px; color: #ffe066; white-space: nowrap; align-self: center; }
+
+    #detonate-btn {
+      background: #cc1111; color: #fff; border: 3px solid #ff4444;
+      padding: 10px 18px; cursor: pointer; font-family: inherit; font-size: 14px;
+      font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px;
+      white-space: nowrap; min-height: 44px;
+    }
+    #detonate-btn:hover:not(:disabled) { background: #ff2222; }
+    #detonate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* User badge — top-left of hud (Reddit username) */
+    #user-badge {
+      background: #1a1a2e; border: 2px solid #44aaff; color: #88ccff;
+      padding: 4px 9px; font-size: 11px; letter-spacing: 0.5px;
+      display: none;   /* shown only when logged in */
+    }
+    #user-badge.show { display: inline-block; }
+
+    /* ═══ Screens ═══ */
+    .screen {
+      position: fixed; inset: 0; display: none; z-index: 400;
+      background: rgba(13,13,26,0.96);
+      flex-direction: column; align-items: stretch;
+      padding: calc(16px + var(--safe-t)) calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) calc(16px + var(--safe-l));
+      overflow-y: auto;
+    }
+    .screen.show { display: flex; }
+    .screen-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-bottom: 12px; border-bottom: 2px solid #333; margin-bottom: 16px;
+    }
+    .screen-title {
+      color: #ffdd44; font-size: 20px; letter-spacing: 3px; text-transform: uppercase;
+    }
+    .screen-body { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+
+    #menu-screen .menu-title {
+      color: #ff4422; font-size: 36px; letter-spacing: 6px;
+      text-align: center; padding: 24px 0 12px;
+      text-shadow: 0 0 24px #ff4422;
+    }
+    #menu-screen .menu-sub {
+      color: #88a; font-size: 13px; text-align: center; margin-bottom: 28px;
+      letter-spacing: 2px;
+    }
+    #menu-screen .menu-grid {
+      display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 420px;
+      margin: 0 auto; width: 100%;
+    }
+    .menu-btn {
+      background: #1a1a2e; color: #fff; border: 2px solid #444;
+      padding: 18px 20px; cursor: pointer; font-family: inherit; font-size: 16px;
+      letter-spacing: 2px; text-transform: uppercase;
+      display: flex; align-items: center; gap: 14px;
+      min-height: 60px;
+    }
+    .menu-btn:hover  { background: #2a2a4e; border-color: #888; }
+    .menu-btn.primary { border-color: #44ddaa; color: #44ddaa; }
+    .menu-btn.primary:hover { background: #1a2e2a; }
+    .menu-btn .ico { font-size: 22px; min-width: 28px; text-align: center; }
+    .menu-btn .sub { font-size: 10px; color: #888; margin-left: auto; letter-spacing: 1px; }
+
+    #levels-screen .levels-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px; padding: 4px;
+    }
+    .level-card {
+      background: #1a1a2e; border: 2px solid #333; padding: 10px;
+      cursor: pointer; display: flex; flex-direction: column; gap: 6px;
+      min-height: 110px; color: #e0e0ff; font-family: inherit; text-align: left;
+    }
+    .level-card:hover:not(.locked) { border-color: #ff4422; background: #2a1a1a; }
+    .level-card.current { border-color: #44ddaa; background: #142a1e; }
+    .level-card.cleared { border-color: #557; }
+    .level-card.locked  { opacity: 0.4; cursor: not-allowed; }
+    .level-card .lvl-num   { font-size: 11px; color: #aac; letter-spacing: 1px; }
+    .level-card .lvl-name  { font-size: 14px; font-weight: bold; color: #fff; }
+    .level-card .lvl-meta  { font-size: 10px; color: #888; margin-top: auto; display: flex; justify-content: space-between; }
+    .level-card .lvl-meta .done { color: #44ddaa; }
+
+    /* ═══ Modals ═══ */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      display: none; align-items: center; justify-content: center; z-index: 500;
+      padding: 16px;
+    }
+    .modal-box {
+      background: #0d0d1a; border: 2px solid #555; color: #e0e0ff;
+      width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto;
+      padding: 20px; font-size: 13px; position: relative;
+    }
+    .modal-box h2 { font-size: 17px; color: #ffdd44; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 2px; }
+    .modal-close {
+      position: absolute; top: 10px; right: 12px;
+      cursor: pointer; font-size: 20px; color: #777; background: none; border: none;
+      font-family: inherit; width: 32px; height: 32px;
+    }
+    .modal-close:hover { color: #fff; }
+    .modal-body { margin-top: 4px; }
+
+    #complete-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; gap: 14px; z-index: 450;
+      animation: complete-in 0.4s ease-out;
+      padding: 16px;
+    }
+    @keyframes complete-in {
+      from { opacity: 0; transform: scale(0.9); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    #complete-overlay h1 {
+      font-size: 36px; color: #44ddaa; text-transform: uppercase; letter-spacing: 4px;
+      text-shadow: 0 0 24px #44ddaa; text-align: center;
+    }
+    #complete-overlay .results-row { color: #e0e0ff; font-size: 14px; text-align: center; line-height: 2; }
+    #complete-overlay .complete-sub { font-size: 18px; color: #ffdd44; }
+    #complete-overlay .complete-next-btn {
+      margin-top: 8px;
+      background: #2a4a2a; color: #fff; border: 3px solid #44ddaa;
+      padding: 12px 24px; cursor: pointer; font-family: inherit; font-size: 14px;
+      font-weight: bold; text-transform: uppercase; letter-spacing: 2px;
+    }
+    #complete-overlay .complete-next-btn:hover { background: #3a6a3a; }
+
+    #flash-overlay {
+      position: fixed; inset: 0; opacity: 0; pointer-events: none; z-index: 600;
+      transition: opacity 0.06s ease-out;
+    }
+
+    #toast-container {
+      position: fixed;
+      bottom: calc(72px + var(--safe-b)); right: calc(14px + var(--safe-r));
+      display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+      pointer-events: none; z-index: 350;
+      max-width: min(320px, 80vw);
+    }
+
+    .big-btn {
+      background: #1a1a2e; color: #e0e0ff; border: 2px solid #666;
+      padding: 10px 22px; cursor: pointer; font-family: inherit; font-size: 13px;
+      text-transform: uppercase; letter-spacing: 1.5px;
+    }
+    .big-btn:hover { background: #2a2a4e; border-color: #aaa; }
+    .big-btn.danger { border-color: #882222; color: #ff8888; }
+    .big-btn.danger:hover { background: #2a1a1a; border-color: #cc4444; }
+
+    /* Leaderboard rows */
+    .lb-row {
+      display: flex; align-items: center; gap: 10px; padding: 7px 0;
+      border-bottom: 1px solid #333; font-size: 13px;
+    }
+    .lb-rank { color: #ffdd44; font-weight: bold; min-width: 28px; text-align: right; }
+    .lb-user { flex: 1; color: #e0e0ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-user.you { color: #44ddaa; font-weight: bold; }
+    .lb-score { color: #88ccff; min-width: 84px; text-align: right; }
+    .lb-empty { color: #888; padding: 16px 0; text-align: center; font-size: 12px; }
+
+    @media (max-width: 640px) {
+      #puzzle-widget { min-width: 180px; padding: 5px 8px; }
+      #puzzle-points-row { display: none; }
+      #level-display { padding: 3px 7px; font-size: 11px; }
+      .hud-btn { padding: 5px 7px; font-size: 11px; }
+      .hud-btn .label { display: none; }
+      #detonate-btn { padding: 10px 14px; font-size: 13px; letter-spacing: 1px; }
+      #bomb-chip { padding: 5px 8px; }
+      #bomb-chip-emoji { font-size: 20px; }
+      #bomb-chip-name  { font-size: 10px; }
+      #bomb-chip-cost  { font-size: 9px; }
+      #hud-top { gap: 6px; }
+      #hud-bottom { flex-wrap: wrap; gap: 6px; }
+      #xp-area { order: 10; flex-basis: 100%; }
+      #xp-bar-wrap { max-width: 100%; }
+      #bux-display { align-self: center; font-size: 12px; }
+      #menu-screen .menu-title { font-size: 28px; letter-spacing: 4px; }
+      #levels-screen .levels-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+      #boot-overlay .boot-title { font-size: 30px; letter-spacing: 5px; }
+    }
+    @media (max-width: 400px) {
+      #puzzle-widget { min-width: 150px; }
+      #puzzle-label span:first-child { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+  <div id="flash-overlay"></div>
+
+  <!-- Boot overlay — fades out after the first scene is built -->
+  <div id="boot-overlay">
+    <div class="boot-title">BOOM<br>DIORAMA</div>
+    <div class="boot-sub">Loading scene…</div>
+    <div class="boot-tag">a Reddit Devvit game</div>
+  </div>
+
+  <!-- ═══ Game HUD ═══ -->
+  <div id="hud">
+    <div id="hud-top">
+      <div id="puzzle-widget">
+        <div id="puzzle-label">
+          <span>🎯 <span id="puzzle-level">Diorama 1</span></span>
+          <span id="puzzle-pct">0% / 40%</span>
+        </div>
+        <div id="puzzle-bar-wrap">
+          <div id="puzzle-bar-fill"></div>
+          <div id="puzzle-bar-target" style="left: 40%"></div>
+        </div>
+        <div id="puzzle-points-row">
+          <span>🧨 Bomb points</span>
+          <span id="puzzle-points">10 / 10</span>
+        </div>
+      </div>
+      <div id="hud-top-right">
+        <span id="user-badge">u/anon</span>
+        <span id="level-display">Lv 1</span>
+        <button class="hud-btn icon" id="sound-btn" title="Toggle sound">🔇</button>
+        <button class="hud-btn icon" id="rebuild-btn" title="Rebuild diorama">🔄</button>
+        <button class="hud-btn icon" id="levels-btn"  title="Level select">🗺</button>
+        <button class="hud-btn icon" id="menu-btn"    title="Menu">☰</button>
+      </div>
+    </div>
+    <div id="hud-bottom">
+      <button id="bomb-chip" aria-haspopup="true" aria-expanded="false">
+        <span id="bomb-chip-emoji">🧨</span>
+        <span id="bomb-chip-label">
+          <span id="bomb-chip-name">Firecracker</span>
+          <span id="bomb-chip-cost">1 pt · 10 left</span>
+        </span>
+        <span id="bomb-chip-arrow">▲</span>
+      </button>
+      <div id="xp-area">
+        <div id="xp-label">0 / 100 XP</div>
+        <div id="xp-bar-wrap"><div id="xp-bar-fill"></div></div>
+      </div>
+      <div id="bux-display">⚙ 0</div>
+      <button id="detonate-btn">💥 Detonate</button>
+    </div>
+  </div>
+
+  <div id="bomb-popover" role="menu" aria-label="Select bomb"></div>
+
+  <!-- ═══ Menu Screen ═══ -->
+  <div class="screen" id="menu-screen">
+    <div class="screen-header">
+      <span class="screen-title">☰ Menu</span>
+      <button class="hud-btn" id="menu-close">✕ Back to game</button>
+    </div>
+    <div class="screen-body">
+      <div class="menu-title">BOOM DIORAMA</div>
+      <div class="menu-sub">Voxel destruction puzzle</div>
+      <div class="menu-grid">
+        <button class="menu-btn primary" data-action="resume">
+          <span class="ico">▶</span> Resume <span class="sub">diorama <span data-bind="puzzleLevel">1</span></span>
+        </button>
+        <button class="menu-btn" data-action="levels">
+          <span class="ico">🗺</span> Level Select
+        </button>
+        <button class="menu-btn" data-action="shop">
+          <span class="ico">🛒</span> Shop <span class="sub"><span data-bind="bux">0</span> ⚙</span>
+        </button>
+        <button class="menu-btn" data-action="achievements">
+          <span class="ico">🏆</span> Achievements <span class="sub"><span data-bind="achCount">0</span>/8</span>
+        </button>
+        <button class="menu-btn" data-action="leaderboard">
+          <span class="ico">🥇</span> Leaderboard
+        </button>
+        <button class="menu-btn" data-action="settings">
+          <span class="ico">⚙</span> Settings
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Level Select Screen ═══ -->
+  <div class="screen" id="levels-screen">
+    <div class="screen-header">
+      <span class="screen-title">🗺 Level Select</span>
+      <button class="hud-btn" id="levels-close">✕ Back</button>
+    </div>
+    <div class="screen-body">
+      <div style="font-size:11px;color:#888;margin-bottom:8px;letter-spacing:1px">
+        You've completed <span data-bind="clearedCount">0</span> · Jump to any unlocked diorama below.
+      </div>
+      <div class="levels-grid" id="levels-grid"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Modals ═══ -->
+  <div class="modal-overlay" id="shop-modal">
+    <div class="modal-box">
+      <button class="modal-close">✕</button>
+      <h2>🛒 Boom Shop</h2>
+      <div class="modal-body"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="achievements-modal">
+    <div class="modal-box">
+      <button class="modal-close">✕</button>
+      <h2>🏆 Achievements</h2>
+      <div class="modal-body"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="leaderboard-modal">
+    <div class="modal-box">
+      <button class="modal-close">✕</button>
+      <h2>🥇 Leaderboard</h2>
+      <div class="modal-body">
+        <div style="font-size:11px;color:#888;margin-bottom:8px">Top redditors by highest diorama cleared.</div>
+        <div id="leaderboard-list"><div class="lb-empty">Loading…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal-box">
+      <button class="modal-close">✕</button>
+      <h2>⚙ Settings</h2>
+      <div class="modal-body" style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:11px;color:#888;line-height:1.7;padding:8px;border:1px solid #333;background:#0f0f18">
+          <strong style="color:#aac">Camera controls</strong><br>
+          • <strong>Click / tap</strong> to place a bomb<br>
+          • <strong>Left-drag</strong> — rotate the view<br>
+          • <strong>Right-drag</strong> or <strong>Shift+drag</strong> — pan<br>
+          • <strong>Wheel / pinch</strong> — zoom<br>
+          • <strong>Two-finger drag</strong> — pan
+        </div>
+        <button class="big-btn" id="settings-sound-btn">🔇 Sound: OFF</button>
+        <button class="big-btn" id="reset-camera-btn">📷 Reset Camera</button>
+        <button class="big-btn danger" id="reset-btn">⚠ Reset All Progress</button>
+        <p style="font-size:11px;color:#666;margin-top:4px">
+          When signed in, progress is saved to your Reddit account.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Level-complete Overlay ═══ -->
+  <div id="complete-overlay">
+    <h1>🎯 Diorama Cleared!</h1>
+    <div class="results-row">
+      <div class="complete-sub" id="complete-destroyed">Destroyed 62% of the scene</div>
+      <div>Bonus: <strong id="complete-xp" style="color:#44aaff"></strong>
+           &nbsp;&nbsp;<strong id="complete-bux" style="color:#ffe066"></strong></div>
+      <div id="complete-level" style="font-size:16px;color:#ffdd44"></div>
+    </div>
+    <button class="complete-next-btn" id="complete-next-btn">Next Diorama ▶</button>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
