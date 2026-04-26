@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1a2e"/>
+      <stop offset="1" stop-color="#0d0d1a"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a4520"/>
+      <stop offset="1" stop-color="#4a2c0d"/>
+    </linearGradient>
+    <radialGradient id="boom" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffe066"/>
+      <stop offset="0.4" stop-color="#ffaa22"/>
+      <stop offset="0.8" stop-color="#cc3322"/>
+      <stop offset="1" stop-color="#cc3322" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- Isometric ground slab -->
+  <g transform="translate(256 280)">
+    <!-- top face -->
+    <polygon points="-160,-80 0,-160 160,-80 0,0" fill="#4a8c2a" stroke="#2a6a1a" stroke-width="2"/>
+    <!-- left face -->
+    <polygon points="-160,-80 -160,80 0,160 0,0" fill="url(#ground)" stroke="#3a1c00" stroke-width="2"/>
+    <!-- right face -->
+    <polygon points="160,-80 160,80 0,160 0,0" fill="#5a3210" stroke="#3a1c00" stroke-width="2"/>
+  </g>
+
+  <!-- Voxel buildings (simplified isometric stacks) -->
+  <g transform="translate(256 280)">
+    <!-- back-left tower -->
+    <g transform="translate(-90 -110)">
+      <polygon points="-30,-10 0,-25 30,-10 0,5" fill="#aa2a22"/>
+      <polygon points="-30,-10 -30,90 0,105 0,5" fill="#e8c87a"/>
+      <polygon points="30,-10 30,90 0,105 0,5" fill="#b89860"/>
+    </g>
+    <!-- front-right tower -->
+    <g transform="translate(50 -50)">
+      <polygon points="-25,-8 0,-20 25,-8 0,4" fill="#aa2a22"/>
+      <polygon points="-25,-8 -25,75 0,87 0,4" fill="#e8c87a"/>
+      <polygon points="25,-8 25,75 0,87 0,4" fill="#b89860"/>
+    </g>
+  </g>
+
+  <!-- Explosion burst -->
+  <g transform="translate(256 240)">
+    <circle r="120" fill="url(#boom)" opacity="0.9"/>
+    <!-- Spike rays -->
+    <g opacity="0.95">
+      <polygon points="0,-150 12,-60 -12,-60" fill="#ffe066"/>
+      <polygon points="0,150 12,60 -12,60" fill="#ffe066"/>
+      <polygon points="-150,0 -60,12 -60,-12" fill="#ffe066"/>
+      <polygon points="150,0 60,12 60,-12" fill="#ffe066"/>
+      <polygon points="-110,-110 -50,-30 -30,-50" fill="#ffaa22"/>
+      <polygon points="110,-110 30,-50 50,-30" fill="#ffaa22"/>
+      <polygon points="-110,110 -50,30 -30,50" fill="#ffaa22"/>
+      <polygon points="110,110 30,50 50,30" fill="#ffaa22"/>
+    </g>
+  </g>
+
+  <!-- Title plate -->
+  <g transform="translate(256 440)">
+    <rect x="-180" y="-32" width="360" height="64" fill="#0d0d1a" stroke="#ff4422" stroke-width="4"/>
+    <text x="0" y="12" text-anchor="middle"
+          font-family="Courier New, monospace" font-weight="bold"
+          font-size="36" letter-spacing="6" fill="#ff4422">BOOM</text>
+  </g>
+</svg>
